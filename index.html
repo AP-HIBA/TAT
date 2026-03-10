@@ -262,7 +262,6 @@ header{
   </div>
   <div class="hdr-right">
     <div class="last-update" id="lastUpdate" style="display:none"></div>
-    <button class="btn btn-hist" id="btnHist">📊 Historial</button>
     <label class="btn btn-primary" id="btnCargar">↑ Cargar planilla Excel</label>
     <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
   </div>
@@ -597,25 +596,10 @@ async function recordHistory(studiesMap){
   }
 }
 
-function loadHistFromSheets(){
-  return new Promise((resolve, reject)=>{
-    const cbName = "tatHistCb_" + Date.now();
-    const script = document.createElement("script");
-    const timeout = setTimeout(()=>{
-      delete window[cbName];
-      script.remove();
-      reject(new Error("Timeout"));
-    }, 12000);
-    window[cbName] = function(data){
-      clearTimeout(timeout);
-      delete window[cbName];
-      script.remove();
-      resolve(data.ok ? data.rows : []);
-    };
-    script.src = GAS_URL + "?callback=" + cbName;
-    script.onerror = ()=>{ clearTimeout(timeout); delete window[cbName]; reject(new Error("Script error")); };
-    document.head.appendChild(script);
-  });
+async function loadHistFromSheets(){
+  const resp = await fetch(GAS_URL);
+  const data = await resp.json();
+  return data.ok ? data.rows : [];
 }
 
 // ─────────────────────────────────────────────────────────
@@ -781,13 +765,7 @@ function renderGrid(){
 // ─────────────────────────────────────────────────────────
 //  HISTORIAL PANEL — contraseña
 // ─────────────────────────────────────────────────────────
-document.getElementById("btnHist").addEventListener("click",()=>{
-  document.getElementById("histPwInput").value="";
-  document.getElementById("histPwInput").classList.remove("err");
-  document.getElementById("histPwErr").style.display="none";
-  document.getElementById("histPwModal").classList.add("on");
-  setTimeout(()=>document.getElementById("histPwInput").focus(),100);
-});
+// btnHist removed
 document.getElementById("histPwCx").onclick=()=>document.getElementById("histPwModal").classList.remove("on");
 document.getElementById("histPwOk").onclick=()=>checkHistPw();
 document.getElementById("histPwInput").addEventListener("keydown",e=>{ if(e.key==="Enter") checkHistPw(); });
