@@ -291,6 +291,12 @@ header{
 <!-- EMPTY STATE -->
 <div class="empty" id="emptyState" style="display:none"></div>
 
+<!-- LOADING BANNER -->
+<div id="loadingBanner" style="display:none;align-items:center;justify-content:center;padding:60px 32px;gap:14px;flex-direction:column">
+  <div style="font-size:28px">⏳</div>
+  <div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--text-muted)">Buscando datos de hoy...</div>
+</div>
+
 <!-- GRID -->
 <div class="grid" id="grid"></div>
 
@@ -603,6 +609,75 @@ async function loadHistFromSheets(){
 }
 
 // ─────────────────────────────────────────────────────────
+//  SNAPSHOT DEL DÍA — guardar y cargar desde Google Sheets
+// ─────────────────────────────────────────────────────────
+async function saveSnapshot(studiesMap, totals){
+  const date = new Date().toISOString().slice(0,10);
+  const snapshot = {};
+  ALL_PATOS.forEach(pato=>{
+    snapshot[pato.init] = studiesMap[pato.init] || [];
+  });
+  try{
+    fetch(GAS_URL, {
+      method:"POST",
+      mode:"no-cors",
+      body: JSON.stringify({
+        action: "saveSnapshot",
+        date,
+        loadedAt: window._loadedAt || date,
+        snapshot: JSON.stringify(snapshot),
+        totals: JSON.stringify(totals)
+      }),
+    });
+  }catch(err){
+    console.warn("Error guardando snapshot:", err);
+  }
+}
+
+async function loadSnapshot(){
+  try{
+    const resp = await fetch(GAS_URL + "?action=getSnapshot");
+    const data = await resp.json();
+    if(!data.ok || !data.snapshot) return null;
+    const today = new Date().toISOString().slice(0,10);
+    if(data.date !== today) return null; // datos de otro día, ignorar
+    return data;
+  }catch(err){
+    console.warn("Error cargando snapshot:", err);
+    return null;
+  }
+}
+
+async function tryLoadTodaySnapshot(){
+  const banner = document.getElementById("loadingBanner");
+  banner.style.display = "flex";
+  const data = await loadSnapshot();
+  banner.style.display = "none";
+  if(!data) return; // no hay datos de hoy
+
+  const snapshot = JSON.parse(data.snapshot);
+  const totals   = JSON.parse(data.totals);
+
+  // Restaurar estado
+  studies = snapshot;
+  dataLoaded = true;
+
+  document.getElementById("cTotal").textContent = totals.total;
+  document.getElementById("cAmar").textContent  = totals.nA;
+  document.getElementById("cRojo").textContent  = totals.nR;
+  document.getElementById("cVenc").textContent  = totals.nVen;
+
+  ["summary","legend"].forEach(id=>document.getElementById(id).style.display="flex");
+  document.getElementById("emptyState").style.display="none";
+
+  const lastEl = document.getElementById("lastUpdate");
+  lastEl.style.display = "";
+  lastEl.innerHTML = `Última carga: <span>${data.loadedAt || data.date}</span>`;
+
+  renderGrid();
+}
+
+// ─────────────────────────────────────────────────────────
 //  PROCESS DATA
 // ─────────────────────────────────────────────────────────
 function processAndRender(){
@@ -645,12 +720,16 @@ function processAndRender(){
   dataLoaded=true;
 
   const now=new Date();
+  const loadedAt = `${now.toLocaleDateString("es-AR")} ${now.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})}`;
   const lastEl=document.getElementById("lastUpdate");
   lastEl.style.display="";
-  lastEl.innerHTML=`<span>${now.toLocaleDateString("es-AR")} ${now.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})}</span>`;
+  lastEl.innerHTML=`Última carga: <span>${loadedAt}</span>`;
+  // Guardar hora de carga para mostrar en otros dispositivos
+  window._loadedAt = loadedAt;
 
-  // Guardar en historial (async, no bloquea)
+  // Guardar en historial y snapshot del día (async, no bloquea)
   recordHistory(studies);
+  saveSnapshot(studies, { total: tot, nA, nR, nVen });
 
   const unrecognized=Object.keys(studies).filter(i=>!ALL_PATOS.find(p=>p.init===i));
   if(unrecognized.length){
@@ -950,6 +1029,7 @@ function toast(msg,icon="✓"){
 //  INIT
 // ─────────────────────────────────────────────────────────
 renderGrid();
+tryLoadTodaySnapshot();
 </script>
 </body>
 </html>
