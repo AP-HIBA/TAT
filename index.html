@@ -821,7 +821,7 @@ async function openHistPanel(){
   }
 
   // Populate year selector
-  const years = [...new Set(histCache.map(r=>String(r.date).slice(0,4)))].sort().reverse();
+  const years = [...new Set(histCache.map(r=>parseYM(r.date).slice(0,4)))].sort().reverse();
   const yearSel = document.getElementById("histYear");
   yearSel.innerHTML = years.length
     ? years.map(y=>`<option value="${y}">${y}</option>`).join("")
@@ -845,10 +845,33 @@ document.getElementById("histClearAll").addEventListener("click",()=>{
   alert("Para borrar el historial, eliminá las filas directamente en el Google Sheet.");
 });
 
+function parseYM(dateVal){
+  // Handles: "2026-03-09", "2026-03", Date objects, serial numbers from Sheets
+  let s = String(dateVal).trim();
+  // If it looks like a JS Date string (e.g. "Mon Mar 09 2026...")
+  if(s.length > 10 && isNaN(s)){
+    const d = new Date(s);
+    if(!isNaN(d)){
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,"0");
+      return `${y}-${m}`;
+    }
+  }
+  // YYYY-MM-DD or YYYY-MM
+  if(/^\d{4}-\d{2}/.test(s)) return s.slice(0,7);
+  // Google Sheets serial number (days since Dec 30 1899)
+  if(/^\d+$/.test(s)){
+    const d = new Date((parseInt(s)-25569)*86400000);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth()+1).padStart(2,"0");
+    return `${y}-${m}`;
+  }
+  return s.slice(0,7);
+}
+
 function monthLabel(ym){
-  const [y,m]=ym.split("-");
-  const names=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-  return `${names[parseInt(m)-1]} ${y}`;
+  const [y,m] = ym.split("-");
+  return `${m}/${y}`;
 }
 
 function renderHist(){
@@ -862,7 +885,7 @@ function renderHist(){
     return;
   }
 
-  let rows = hist.filter(r=> (!year || String(r.date).startsWith(year)) && (patof==="all" || r.pato===patof));
+  let rows = hist.filter(r=> (!year || parseYM(r.date).startsWith(year)) && (patof==="all" || r.pato===patof));
 
   if(!rows.length){
     content.innerHTML=`<div class="hist-empty">No hay datos para el período seleccionado.</div>`;
@@ -873,7 +896,7 @@ function renderHist(){
   // agg[pato][ym] = { vencido: Set, hoy: Set, tres_dias: Set, verde: Set, name }
   const agg = {};
   rows.forEach(r=>{
-    const ym = String(r.date).slice(0,7); // "YYYY-MM"
+    const ym = parseYM(r.date);
     if(!agg[r.pato]) agg[r.pato]={ name:r.name, months:{} };
     if(!agg[r.pato].months[ym]) agg[r.pato].months[ym]={ vencido:new Set(), hoy:new Set(), tres_dias:new Set(), verde:new Set() };
     const m = agg[r.pato].months[ym];
