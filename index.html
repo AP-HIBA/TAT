@@ -640,7 +640,8 @@ async function loadSnapshot(){
     const data = await resp.json();
     if(!data.ok || !data.snapshot) return null;
     const today = new Date().toISOString().slice(0,10);
-    if(data.date !== today) return null; // datos de otro día, ignorar
+    const snapshotDate = String(data.date).slice(0,10);
+    if(snapshotDate !== today) return null; // datos de otro día, ignorar
     return data;
   }catch(err){
     console.warn("Error cargando snapshot:", err);
